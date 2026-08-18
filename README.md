@@ -80,11 +80,11 @@ CREATE TABLE personalization_log (
 CREATE INDEX idx_user_features_tenant ON user_features(tenant_id);
 CREATE INDEX idx_personalization_log  ON personalization_log(user_id, created_at);
 
-// src/personalization/features.js
+ src/personalization/features.js
 const redis  = require('redis');
 const { Pool } = require('pg');
 
-const cache = redis.createClient({ url: `redis://${process.env.REDIS_HOST}:6379` });
+const cache = redis.createClient({ url: redis://${process.env.REDIS_HOST}:6379 });
 const db    = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const TTL = 300;
@@ -92,7 +92,7 @@ const TTL = 300;
 cache.connect();
 
 const getFeatures = async (userId) => {
-  const key    = `features:${userId}`;
+  const key    = features:${userId};
   const cached = await cache.get(key);
   if (cached) return { features: JSON.parse(cached), cacheHit: true };
 
