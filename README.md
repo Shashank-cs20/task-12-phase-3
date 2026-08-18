@@ -80,11 +80,11 @@ CREATE TABLE personalization_log (
 CREATE INDEX idx_user_features_tenant ON user_features(tenant_id);
 CREATE INDEX idx_personalization_log  ON personalization_log(user_id, created_at);
 
-src/personalization/features.js
+// src/personalization/features.js
 const redis  = require('redis');
 const { Pool } = require('pg');
 
-const cache = redis.createClient({ url: redis://${process.env.REDIS_HOST}:6379 });
+const cache = redis.createClient({ url: `redis://${process.env.REDIS_HOST}:6379` });
 const db    = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const TTL = 300;
@@ -92,7 +92,7 @@ const TTL = 300;
 cache.connect();
 
 const getFeatures = async (userId) => {
-  const key    = features:${userId};
+  const key    = `features:${userId}`;
   const cached = await cache.get(key);
   if (cached) return { features: JSON.parse(cached), cacheHit: true };
 
@@ -118,10 +118,10 @@ const updateFeatures = async (userId, tenantId, event) => {
      ON CONFLICT (user_id) DO UPDATE
      SET click_history = user_features.click_history || $3::jsonb,
          last_active   = NOW(),
-         updated_at    = NOW()`,
+         updated_at    = NOW(),
     [userId, tenantId, JSON.stringify({ [event.job_id]: event.ts })]
   );
-  await cache.del( features:${userId});
+  await cache.del(features:${userId});
 };
 
 const warmCache = async (tenantId) => {
@@ -130,7 +130,7 @@ const warmCache = async (tenantId) => {
     [tenantId, '24 hours']
   );
   for (const user of rows) {
-    await cache.setEx( features:${user.user_id} , TTL, JSON.stringify(user));
+    await cache.setEx(features:${user.user_id}, TTL, JSON.stringify(user));
   }
   console.log(JSON.stringify({ warmed: rows.length, tenant: tenantId }));
 };
@@ -151,7 +151,7 @@ data:
     appendonly no
     tcp-keepalive 60
     timeout 300
-
+    
 kubectl apply -f k8s/production/cache-config.yaml
 kubectl apply -f k8s/production/cache-warmer-cronjob.yaml
 
