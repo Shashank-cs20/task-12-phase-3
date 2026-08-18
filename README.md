@@ -137,23 +137,45 @@ const warmCache = async (tenantId) => {
 
 module.exports = { getFeatures, updateFeatures, warmCache };
 
- k8s/production/cache-config.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: redis-config
-  namespace: production
-data:
-  redis.conf: |
-    maxmemory 2gb
-    maxmemory-policy allkeys-lru
-    save ""
-    appendonly no
-    tcp-keepalive 60
-    timeout 300
-    
-kubectl apply -f k8s/production/cache-config.yaml
-kubectl apply -f k8s/production/cache-warmer-cronjob.yaml
+ src/personalization/scorer.js
+const axios   = require('axios');
+const { getFeatures } = require('./features');
+const { Pool }        = require('pg');
+
+const db          = new Pool({ connectionString: process.env.DATABASE_URL });
+const ML_ENDPOINT = process.env.ML_SERVE_URL || 'http://ml-serve/predict';
+
+const score = async (userId, jobs) => {
+  const start = Date.now();
+  const { features, cacheHit } = await getFeatures(userId);
+
+  let scored;
+  try {
+    const res = await axios.post(ML_ENDPOINT, {
+      user_features: features,
+      jobs:          jobs.map(j => ({ id: j.id, salary: j.salary, location: j.location }))
+    }, { timeout: 100 });
+    scored = res.data.scores;
+  } catch {
+    scored = jobs.map((j, i) => ({ id: j.id, score: 1 / (i + 1) }));
+  }
+
+  const ranked = jobs
+    .map(j => ({ ...j, score: scored.find(s => s.id === j.id)?.score || 0 }))
+    .sort((a, b) => b.score - a.score);
+
+  const latency = Date.now() - start;
+  await db.query(
+    INSERT INTO personalization_log
+     (user_id, request_type, cache_hit, latency_ms, model_version)
+     VALUES ($1,'score',$2,$3,$4),
+    [userId, cacheHit, latency, scored.model_version || 'fallback']
+  );
+
+  return { jobs: ranked, latency_ms: latency, cache_hit: cacheHit };
+};
+
+module.exports = { score };
 
 Step 3 — Inference autoscaling (Stage C)
 
